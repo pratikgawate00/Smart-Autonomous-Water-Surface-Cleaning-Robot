@@ -1,0 +1,905 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Smart Water Robot — 3D Explorer</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;800;900&family=Exo+2:ital,wght@0,300;0,400;0,600;1,300&display=swap" rel="stylesheet"/>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+:root{
+  --bg:#020c18;
+  --teal:#00ffd0;
+  --cyan:#00d4ff;
+  --solar:#ffd60a;
+  --red:#ff4d6d;
+  --card:rgba(0,212,255,0.05);
+  --border:rgba(0,212,255,0.18);
+  --text:rgba(210,245,255,0.85);
+  --dim:rgba(210,245,255,0.4);
+}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);}
+#canvas-container{position:fixed;inset:0;z-index:0;}
+canvas{display:block;}
+
+/* ── TOP BAR ── */
+#topbar{
+  position:fixed;top:0;left:0;right:0;z-index:10;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0.9rem 2rem;
+  background:linear-gradient(to bottom,rgba(2,12,24,0.95),rgba(2,12,24,0));
+  backdrop-filter:blur(2px);
+}
+#topbar h1{
+  font-family:'Orbitron',sans-serif;
+  font-size:clamp(0.7rem,2vw,1rem);
+  font-weight:800;
+  letter-spacing:3px;
+  background:linear-gradient(90deg,var(--teal),var(--cyan));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  text-transform:uppercase;
+}
+.badge-row{display:flex;gap:0.5rem;flex-wrap:wrap;}
+.tag{
+  font-family:'Exo 2',sans-serif;font-size:0.65rem;letter-spacing:2px;
+  padding:0.25rem 0.7rem;border-radius:20px;
+  border:1px solid var(--border);color:var(--dim);
+  text-transform:uppercase;
+}
+
+/* ── HINT ── */
+#hint{
+  position:fixed;bottom:1.8rem;left:50%;transform:translateX(-50%);
+  font-family:'Exo 2',sans-serif;font-size:0.72rem;letter-spacing:2px;
+  color:var(--dim);text-transform:uppercase;z-index:10;
+  animation:pulse 2.5s ease-in-out infinite;
+  pointer-events:none;
+}
+@keyframes pulse{0%,100%{opacity:.4}50%{opacity:.9}}
+
+/* ── SIDE PANEL ── */
+#panel{
+  position:fixed;right:0;top:50%;transform:translateY(-50%);
+  z-index:10;display:flex;flex-direction:column;gap:0.5rem;
+  padding:1rem 0.8rem;
+}
+.part-btn{
+  display:flex;align-items:center;gap:0.6rem;
+  background:rgba(0,12,28,0.7);border:1px solid var(--border);
+  border-radius:10px;padding:0.55rem 0.9rem;cursor:pointer;
+  font-family:'Exo 2',sans-serif;font-size:0.72rem;
+  color:var(--dim);letter-spacing:1.5px;text-transform:uppercase;
+  transition:all 0.2s;backdrop-filter:blur(8px);
+  white-space:nowrap;
+}
+.part-btn:hover,.part-btn.active{
+  border-color:var(--teal);color:var(--teal);
+  background:rgba(0,255,208,0.06);
+  box-shadow:0 0 16px rgba(0,255,208,0.12);
+}
+.part-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+
+/* ── INFO CARD ── */
+#info-card{
+  position:fixed;left:1.5rem;bottom:2.5rem;
+  width:280px;z-index:10;
+  background:rgba(2,12,24,0.85);
+  border:1px solid var(--border);border-radius:16px;
+  padding:1.2rem 1.4rem;backdrop-filter:blur(16px);
+  transition:opacity 0.3s,transform 0.3s;
+  transform:translateY(0);opacity:0;pointer-events:none;
+}
+#info-card.visible{opacity:1;pointer-events:all;}
+#info-card h2{
+  font-family:'Orbitron',sans-serif;font-size:0.75rem;
+  letter-spacing:2px;color:var(--teal);margin-bottom:0.6rem;
+  text-transform:uppercase;
+}
+#info-card .spec-list{list-style:none;}
+#info-card .spec-list li{
+  font-family:'Exo 2',sans-serif;font-size:0.78rem;
+  color:var(--text);padding:0.22rem 0;
+  border-bottom:1px solid rgba(0,212,255,0.08);
+  display:flex;justify-content:space-between;
+}
+#info-card .spec-list li span{color:var(--dim);}
+#info-card .desc{
+  font-family:'Exo 2',sans-serif;font-size:0.77rem;font-style:italic;
+  color:var(--dim);margin-top:0.7rem;line-height:1.5;
+}
+#close-card{
+  position:absolute;top:0.7rem;right:0.9rem;
+  background:none;border:none;color:var(--dim);
+  font-size:1rem;cursor:pointer;
+}
+#close-card:hover{color:var(--red);}
+
+/* ── CONTROLS ── */
+#controls{
+  position:fixed;left:1.5rem;top:50%;transform:translateY(-50%);
+  z-index:10;display:flex;flex-direction:column;gap:0.5rem;
+}
+.ctrl-btn{
+  width:40px;height:40px;border-radius:10px;
+  background:rgba(0,12,28,0.7);border:1px solid var(--border);
+  color:var(--dim);font-size:1rem;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  transition:all 0.2s;backdrop-filter:blur(8px);
+}
+.ctrl-btn:hover{border-color:var(--cyan);color:var(--cyan);}
+
+/* ── LOADING ── */
+#loader{
+  position:fixed;inset:0;z-index:100;
+  background:var(--bg);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:1.2rem;transition:opacity 0.8s;
+}
+#loader h2{
+  font-family:'Orbitron',sans-serif;font-size:1.1rem;
+  letter-spacing:4px;color:var(--teal);text-transform:uppercase;
+}
+.load-bar{width:220px;height:2px;background:rgba(0,255,208,0.1);border-radius:2px;overflow:hidden;}
+.load-fill{height:100%;width:0;background:linear-gradient(90deg,var(--teal),var(--cyan));
+  border-radius:2px;animation:loadAnim 1.4s ease forwards;}
+@keyframes loadAnim{to{width:100%}}
+.load-txt{font-family:'Exo 2',sans-serif;font-size:0.7rem;letter-spacing:3px;
+  color:var(--dim);text-transform:uppercase;animation:loadAnim2 1.4s ease forwards;}
+@keyframes loadAnim2{0%{opacity:0.3}100%{opacity:0.8}}
+
+/* ── SECTION NAV ── */
+#section-nav{
+  position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
+  z-index:10;display:none;
+}
+</style>
+</head>
+<body>
+
+<div id="loader">
+  <h2>🌊 Loading Robot</h2>
+  <div class="load-bar"><div class="load-fill"></div></div>
+  <p class="load-txt">Initializing 3D Environment…</p>
+</div>
+
+<div id="canvas-container"></div>
+
+<!-- TOP BAR -->
+<div id="topbar">
+  <h1>🤖 Smart Water Surface Cleaning Robot</h1>
+  <div class="badge-row">
+    <span class="tag">☀ Solar Powered</span>
+    <span class="tag">🌊 Autonomous</span>
+    <span class="tag">♻ Eco-Friendly</span>
+  </div>
+</div>
+
+<!-- CONTROLS -->
+<div id="controls">
+  <button class="ctrl-btn" id="btn-reset" title="Reset View">⟳</button>
+  <button class="ctrl-btn" id="btn-top" title="Top View">⬆</button>
+  <button class="ctrl-btn" id="btn-front" title="Front View">◉</button>
+  <button class="ctrl-btn" id="btn-explode" title="Explode View">💥</button>
+</div>
+
+<!-- PARTS PANEL -->
+<div id="panel">
+  <div class="part-btn active" data-part="all" onclick="selectPart('all')">
+    <span class="part-dot" style="background:#00ffd0"></span> Full Robot
+  </div>
+  <div class="part-btn" data-part="hull" onclick="selectPart('hull')">
+    <span class="part-dot" style="background:#1e8aff"></span> Hull
+  </div>
+  <div class="part-btn" data-part="solar" onclick="selectPart('solar')">
+    <span class="part-dot" style="background:#ffd60a"></span> Solar Panel
+  </div>
+  <div class="part-btn" data-part="camera" onclick="selectPart('camera')">
+    <span class="part-dot" style="background:#00d4ff"></span> Camera
+  </div>
+  <div class="part-btn" data-part="net" onclick="selectPart('net')">
+    <span class="part-dot" style="background:#00ffd0"></span> Debris Net
+  </div>
+  <div class="part-btn" data-part="propeller" onclick="selectPart('propeller')">
+    <span class="part-dot" style="background:#ff4d6d"></span> Propeller
+  </div>
+  <div class="part-btn" data-part="controller" onclick="selectPart('controller')">
+    <span class="part-dot" style="background:#bf5fff"></span> IoT Controller
+  </div>
+</div>
+
+<!-- INFO CARD -->
+<div id="info-card">
+  <button id="close-card" onclick="closeCard()">✕</button>
+  <h2 id="card-title">Component</h2>
+  <ul class="spec-list" id="card-specs"></ul>
+  <p class="desc" id="card-desc"></p>
+</div>
+
+<div id="hint">🖱 Drag to rotate &nbsp;·&nbsp; Scroll to zoom &nbsp;·&nbsp; Click part for info</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// ═══════════════════════════════════════
+//  SCENE SETUP
+// ═══════════════════════════════════════
+const container = document.getElementById('canvas-container');
+const W = () => window.innerWidth, H = () => window.innerHeight;
+
+const renderer = new THREE.WebGLRenderer({antialias:true,alpha:true});
+renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+renderer.setSize(W(),H());
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.2;
+container.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0x020c18, 0.045);
+
+const camera = new THREE.PerspectiveCamera(50, W()/H(), 0.1, 200);
+camera.position.set(6, 4, 8);
+camera.lookAt(0,0,0);
+
+// ── LIGHTS ──
+const ambient = new THREE.AmbientLight(0x0d2a4a, 1.5);
+scene.add(ambient);
+
+const sun = new THREE.DirectionalLight(0xffd0a0, 2.5);
+sun.position.set(5,10,5);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048,2048);
+scene.add(sun);
+
+const fillLight = new THREE.PointLight(0x00ffd0, 1.2, 25);
+fillLight.position.set(-4,3,4);
+scene.add(fillLight);
+
+const rimLight = new THREE.PointLight(0x0088ff, 0.8, 20);
+rimLight.position.set(0,2,-6);
+scene.add(rimLight);
+
+// ── HELPERS ──
+const M = THREE.MeshStandardMaterial;
+const G = THREE.BoxGeometry;
+
+// Materials
+const matHull     = new M({color:0x1a4a7a,metalness:0.4,roughness:0.5});
+const matDeck     = new M({color:0x0d2d4a,metalness:0.3,roughness:0.6});
+const matSolar    = new M({color:0xffa500,metalness:0.2,roughness:0.3,
+                            emissive:0x553300,emissiveIntensity:0.3});
+const matSolarCell= new M({color:0x1a2a5a,metalness:0.5,roughness:0.2,
+                            emissive:0x001133,emissiveIntensity:0.4});
+const matCamera   = new M({color:0x1a1a2e,metalness:0.7,roughness:0.3});
+const matLens     = new M({color:0x00d4ff,metalness:0.9,roughness:0.1,
+                            emissive:0x003366,emissiveIntensity:0.8,transparent:true,opacity:0.9});
+const matNet      = new M({color:0x00ffd0,metalness:0.1,roughness:0.9,
+                            wireframe:true,transparent:true,opacity:0.7});
+const matProp     = new M({color:0x2a5a8a,metalness:0.8,roughness:0.2});
+const matHub      = new M({color:0x00d4ff,metalness:0.9,roughness:0.1,
+                            emissive:0x003355,emissiveIntensity:0.5});
+const matCtrl     = new M({color:0x0a1628,metalness:0.5,roughness:0.4,
+                            emissive:0x001122,emissiveIntensity:0.3});
+const matGlow     = new M({color:0x00ffd0,emissive:0x00ffd0,emissiveIntensity:1,
+                            metalness:0,roughness:1});
+const matMast     = new M({color:0x1a3a5a,metalness:0.6,roughness:0.4});
+const matWater    = new M({color:0x0a3d6b,metalness:0.1,roughness:0.2,
+                            transparent:true,opacity:0.75});
+const matFloat    = new M({color:0x0d5580,metalness:0.2,roughness:0.8});
+
+// Part registry for raycasting
+const partMeshes = {};
+
+function regPart(mesh, name){
+  mesh.userData.part = name;
+  partMeshes[name] = partMeshes[name] || [];
+  partMeshes[name].push(mesh);
+  return mesh;
+}
+
+// ═══════════════════════════════════════
+//  BUILD ROBOT
+// ═══════════════════════════════════════
+const robot = new THREE.Group();
+scene.add(robot);
+
+// Stored original positions for explode
+const origPos = {};
+
+// ── 1. HULL (pontoon shape) ──
+const hullGroup = new THREE.Group();
+hullGroup.name = 'hull';
+robot.add(hullGroup);
+
+// Main body
+const hullGeo = new THREE.CylinderGeometry(0.55, 0.7, 3.5, 16, 1, false);
+const hull = new THREE.Mesh(hullGeo, matHull);
+hull.rotation.z = Math.PI/2;
+hull.castShadow = true;
+regPart(hull,'hull');
+hullGroup.add(hull);
+
+// Hull nose cone (front)
+const noseGeo = new THREE.ConeGeometry(0.55, 0.6, 16);
+const nose = new THREE.Mesh(noseGeo, matHull);
+nose.rotation.z = Math.PI/2;
+nose.position.set(2.0, 0, 0);
+regPart(nose,'hull');
+hullGroup.add(nose);
+
+// Hull tail
+const tailGeo = new THREE.ConeGeometry(0.7, 0.5, 16);
+const tail = new THREE.Mesh(tailGeo, new M({color:0x122840,metalness:0.4,roughness:0.5}));
+tail.rotation.z = -Math.PI/2;
+tail.position.set(-2.0, 0, 0);
+regPart(tail,'hull');
+hullGroup.add(tail);
+
+// Deck platform
+const deck = new THREE.Mesh(new G(3.2, 0.12, 1.1), matDeck);
+deck.position.set(0, 0.62, 0);
+deck.castShadow = true;
+regPart(deck,'hull');
+hullGroup.add(deck);
+
+// Waterline float rings
+for(let i=-1;i<=1;i+=1){
+  const ring = new THREE.Mesh(
+    new THREE.TorusGeometry(0.62,0.05,8,20),
+    matFloat
+  );
+  ring.rotation.x = Math.PI/2;
+  ring.position.set(i*0.8,0,0);
+  hullGroup.add(ring);
+}
+
+origPos['hull'] = {x:0,y:0,z:0};
+
+// ── 2. SOLAR PANEL ──
+const solarGroup = new THREE.Group();
+solarGroup.name = 'solar';
+robot.add(solarGroup);
+
+const solarFrame = new THREE.Mesh(new G(2.2,0.06,1.0), new M({color:0x333300,metalness:0.5,roughness:0.5}));
+solarFrame.position.set(0,1.6,0);
+solarGroup.add(solarFrame);
+
+// Solar cell tiles
+for(let r=0;r<3;r++){
+  for(let c=0;c<5;c++){
+    const cell = new THREE.Mesh(new G(0.38,0.04,0.28), matSolarCell);
+    cell.position.set(-0.9+c*0.44, 1.63, -0.32+r*0.32);
+    cell.castShadow = false;
+    regPart(cell,'solar');
+    solarGroup.add(cell);
+  }
+}
+
+// Panel surround
+const pFrame = new THREE.Mesh(new G(2.3,0.08,1.08), matSolar);
+pFrame.position.set(0,1.58,0);
+regPart(pFrame,'solar');
+solarGroup.add(pFrame);
+
+// Support struts
+for(let s=-1;s<=1;s+=2){
+  const strut = new THREE.Mesh(new G(0.06,0.55,0.06), matMast);
+  strut.position.set(s*0.7, 1.3, 0);
+  solarGroup.add(strut);
+}
+
+origPos['solar'] = {x:0,y:0,z:0};
+
+// ── 3. CAMERA SYSTEM ──
+const cameraGroup = new THREE.Group();
+cameraGroup.name = 'camera';
+robot.add(cameraGroup);
+
+// Mast
+const mast = new THREE.Mesh(new G(0.08,0.7,0.08), matMast);
+mast.position.set(0.3,2.0,0);
+cameraGroup.add(mast);
+
+// Camera body
+const camBody = new THREE.Mesh(new G(0.35,0.2,0.22), matCamera);
+camBody.position.set(0.3,2.42,0);
+camBody.castShadow = true;
+regPart(camBody,'camera');
+cameraGroup.add(camBody);
+
+// Lens
+const lens = new THREE.Mesh(new THREE.CylinderGeometry(0.07,0.09,0.12,16), matLens);
+lens.rotation.z = Math.PI/2;
+lens.position.set(0.53,2.42,0);
+regPart(lens,'camera');
+cameraGroup.add(lens);
+
+// LED indicator
+const led = new THREE.Mesh(new THREE.SphereGeometry(0.035,8,8), matGlow);
+led.position.set(0.3,2.56,0.08);
+cameraGroup.add(led);
+
+// Point light on camera
+const camLight = new THREE.PointLight(0x00ffd0, 0.5, 2);
+camLight.position.set(0.3,2.4,0);
+cameraGroup.add(camLight);
+
+origPos['camera'] = {x:0,y:0,z:0};
+
+// ── 4. DEBRIS NET ──
+const netGroup = new THREE.Group();
+netGroup.name = 'net';
+robot.add(netGroup);
+
+// Net frame wires
+const netFrameGeo = new THREE.TorusGeometry(0.5,0.025,8,20,Math.PI);
+const netFrame1 = new THREE.Mesh(netFrameGeo, new M({color:0x00ffd0,metalness:0.3,roughness:0.5}));
+netFrame1.position.set(2.3,0.2,0);
+netFrame1.rotation.y = Math.PI/2;
+regPart(netFrame1,'net');
+netGroup.add(netFrame1);
+
+// Net mesh (lattice)
+for(let i=0;i<6;i++){
+  const wire = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.012,0.012,0.85,6),
+    new M({color:0x00ffd0,transparent:true,opacity:0.6})
+  );
+  wire.rotation.z = Math.PI/2;
+  wire.position.set(2.4+i*0.08, 0.2-i*0.06, (i%2===0?0.2:-0.2));
+  regPart(wire,'net');
+  netGroup.add(wire);
+}
+// Net bag
+const netBag = new THREE.Mesh(
+  new THREE.SphereGeometry(0.48,10,8,0,Math.PI*2,0,Math.PI/2),
+  matNet
+);
+netBag.position.set(2.4,0.2,0);
+netBag.rotation.y = Math.PI/2;
+regPart(netBag,'net');
+netGroup.add(netBag);
+
+// Net rod supports
+for(let s=-1;s<=1;s+=2){
+  const rod = new THREE.Mesh(new G(0.6,0.04,0.04), new M({color:0x1a5a3a,metalness:0.5,roughness:0.4}));
+  rod.position.set(2.1,0.5,s*0.35);
+  netGroup.add(rod);
+}
+
+origPos['net'] = {x:0,y:0,z:0};
+
+// ── 5. PROPELLER ──
+const propGroup = new THREE.Group();
+propGroup.name = 'propeller';
+robot.add(propGroup);
+
+// Motor housing
+const motorHouse = new THREE.Mesh(
+  new THREE.CylinderGeometry(0.2,0.22,0.4,12),
+  new M({color:0x1a2a3a,metalness:0.7,roughness:0.3})
+);
+motorHouse.rotation.z = Math.PI/2;
+motorHouse.position.set(-2.35,0,0);
+regPart(motorHouse,'propeller');
+propGroup.add(motorHouse);
+
+// Blades (4)
+for(let b=0;b<4;b++){
+  const bladeGeo = new THREE.BoxGeometry(0.08, 0.55, 0.18);
+  const blade = new THREE.Mesh(bladeGeo, matProp);
+  blade.rotation.x = (b * Math.PI/2);
+  // skew for pitch
+  blade.rotation.y = 0.3;
+  blade.position.set(-2.38, Math.cos(b*Math.PI/2)*0.3, Math.sin(b*Math.PI/2)*0.3);
+  regPart(blade,'propeller');
+  propGroup.add(blade);
+}
+
+// Hub
+const hub = new THREE.Mesh(new THREE.SphereGeometry(0.13,12,12), matHub);
+hub.position.set(-2.38,0,0);
+regPart(hub,'propeller');
+propGroup.add(hub);
+
+// Shaft
+const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.04,0.04,0.3,8), matMast);
+shaft.rotation.z = Math.PI/2;
+shaft.position.set(-2.22,0,0);
+propGroup.add(shaft);
+
+origPos['propeller'] = {x:0,y:0,z:0};
+
+// ── 6. IoT CONTROLLER BOX ──
+const ctrlGroup = new THREE.Group();
+ctrlGroup.name = 'controller';
+robot.add(ctrlGroup);
+
+const ctrlBox = new THREE.Mesh(new G(0.9,0.28,0.7), matCtrl);
+ctrlBox.position.set(0,0.8,0);
+ctrlBox.castShadow = true;
+regPart(ctrlBox,'controller');
+ctrlGroup.add(ctrlBox);
+
+// LED strip on controller
+for(let l=0;l<4;l++){
+  const ledDot = new THREE.Mesh(new THREE.SphereGeometry(0.03,6,6),
+    new M({color:[0x00ff88,0x00d4ff,0xff4d6d,0xffd60a][l],
+           emissive:[0x00ff88,0x00d4ff,0xff4d6d,0xffd60a][l],emissiveIntensity:1}));
+  ledDot.position.set(-0.3+l*0.2, 0.96, 0.34);
+  ctrlGroup.add(ledDot);
+}
+
+// Antenna
+const ant = new THREE.Mesh(new THREE.CylinderGeometry(0.015,0.015,0.5,6), matMast);
+ant.position.set(0.35,1.2,0.25);
+ctrlGroup.add(ant);
+
+const antTip = new THREE.Mesh(new THREE.SphereGeometry(0.04,6,6), matGlow);
+antTip.position.set(0.35,1.46,0.25);
+ctrlGroup.add(antTip);
+
+// Battery pack beneath deck
+const battery = new THREE.Mesh(new G(0.8,0.22,0.55), new M({color:0x0a1628,metalness:0.3,roughness:0.6}));
+battery.position.set(-0.5,0.72,-0.1);
+regPart(battery,'controller');
+ctrlGroup.add(battery);
+
+origPos['controller'] = {x:0,y:0,z:0};
+
+// ═══════════════════════════════════════
+//  WATER PLANE
+// ═══════════════════════════════════════
+const waterPlane = new THREE.Mesh(
+  new THREE.PlaneGeometry(40,40,40,40),
+  matWater
+);
+waterPlane.rotation.x = -Math.PI/2;
+waterPlane.position.y = -0.55;
+waterPlane.receiveShadow = true;
+scene.add(waterPlane);
+
+// Reflective water grid effect
+const gridHelper = new THREE.GridHelper(40,40, 0x00d4ff, 0x00d4ff);
+gridHelper.position.y = -0.54;
+gridHelper.material.opacity = 0.06;
+gridHelper.material.transparent = true;
+scene.add(gridHelper);
+
+// ── Floating debris particles ──
+for(let d=0;d<12;d++){
+  const debris = new THREE.Mesh(
+    new THREE.BoxGeometry(0.08+Math.random()*0.12, 0.04, 0.06+Math.random()*0.1),
+    new M({color:0x2d6b4a,roughness:0.9})
+  );
+  const angle = Math.random()*Math.PI*2;
+  const r = 3+Math.random()*4;
+  debris.position.set(Math.cos(angle)*r,-0.51,Math.sin(angle)*r);
+  scene.add(debris);
+}
+
+// ── Background stars ──
+const starGeo = new THREE.BufferGeometry();
+const stars = [];
+for(let i=0;i<800;i++){
+  stars.push((Math.random()-0.5)*120,(Math.random()-0.5)*60,(Math.random()-0.5)*120);
+}
+starGeo.setAttribute('position',new THREE.Float32BufferAttribute(stars,3));
+const starMat = new THREE.PointsMaterial({color:0xffffff,size:0.12,transparent:true,opacity:0.6});
+scene.add(new THREE.Points(starGeo,starMat));
+
+// ═══════════════════════════════════════
+//  ORBIT CONTROLS (manual)
+// ═══════════════════════════════════════
+let isDragging=false, prevMouse={x:0,y:0};
+let spherical={theta:0.6,phi:1.1,r:10};
+let targetSpherical={theta:0.6,phi:1.1,r:10};
+
+function updateCamera(){
+  camera.position.set(
+    targetSpherical.r*Math.sin(targetSpherical.phi)*Math.sin(targetSpherical.theta),
+    targetSpherical.r*Math.cos(targetSpherical.phi),
+    targetSpherical.r*Math.sin(targetSpherical.phi)*Math.cos(targetSpherical.theta)
+  );
+  camera.lookAt(0,0.5,0);
+}
+
+container.addEventListener('mousedown',e=>{isDragging=true;prevMouse={x:e.clientX,y:e.clientY};});
+window.addEventListener('mouseup',()=>isDragging=false);
+window.addEventListener('mousemove',e=>{
+  if(!isDragging)return;
+  const dx=e.clientX-prevMouse.x, dy=e.clientY-prevMouse.y;
+  targetSpherical.theta-=dx*0.008;
+  targetSpherical.phi=Math.max(0.3,Math.min(1.55,targetSpherical.phi+dy*0.008));
+  prevMouse={x:e.clientX,y:e.clientY};
+});
+container.addEventListener('wheel',e=>{
+  targetSpherical.r=Math.max(3,Math.min(20,targetSpherical.r+e.deltaY*0.01));
+},{passive:true});
+
+// Touch
+let prevTouch=null;
+container.addEventListener('touchstart',e=>{prevTouch={x:e.touches[0].clientX,y:e.touches[0].clientY};});
+container.addEventListener('touchmove',e=>{
+  if(!prevTouch)return;
+  const dx=e.touches[0].clientX-prevTouch.x, dy=e.touches[0].clientY-prevTouch.y;
+  targetSpherical.theta-=dx*0.01;
+  targetSpherical.phi=Math.max(0.3,Math.min(1.55,targetSpherical.phi+dy*0.01));
+  prevTouch={x:e.touches[0].clientX,y:e.touches[0].clientY};
+});
+
+// ═══════════════════════════════════════
+//  RAYCASTING (click)
+// ═══════════════════════════════════════
+const raycaster=new THREE.Raycaster();
+const mouse=new THREE.Vector2();
+const allClickable=[];
+Object.values(partMeshes).forEach(arr=>arr.forEach(m=>allClickable.push(m)));
+
+container.addEventListener('click',e=>{
+  mouse.x=(e.clientX/W())*2-1;
+  mouse.y=-(e.clientY/H())*2+1;
+  raycaster.setFromCamera(mouse,camera);
+  const hits=raycaster.intersectObjects(allClickable);
+  if(hits.length>0){
+    const part=hits[0].object.userData.part;
+    if(part)selectPart(part);
+  }
+});
+
+// ═══════════════════════════════════════
+//  PART DATA
+// ═══════════════════════════════════════
+const partData={
+  hull:{
+    title:'Hull & Pontoon Body',
+    desc:'Lightweight waterproof hull providing buoyancy and stability on water surfaces.',
+    specs:[
+      ['Length','1.5 – 1.8 m'],['Width','0.8 m'],['Material','HDPE / Fiberglass'],
+      ['Buoyancy','~15 kg load'],['Draft','~12 cm']
+    ]
+  },
+  solar:{
+    title:'Solar Panel',
+    desc:'Monocrystalline solar panel mounted on top deck converting sunlight to electrical energy.',
+    specs:[
+      ['Wattage','50 W'],['Voltage','18 V'],['Type','Monocrystalline'],
+      ['Efficiency','~22%'],['Dimensions','120 × 55 cm']
+    ]
+  },
+  camera:{
+    title:'Navigation Camera',
+    desc:'Wide-angle camera for real-time monitoring, obstacle detection, and autonomous navigation.',
+    specs:[
+      ['Resolution','1080p / 4K'],['FOV','120°'],['Interface','USB / CSI'],
+      ['Frame Rate','30 fps'],['Night Vision','IR-assisted']
+    ]
+  },
+  net:{
+    title:'Debris Collection Net',
+    desc:'Front-mounted nylon mesh net that scoops floating waste as the robot moves forward.',
+    specs:[
+      ['Material','Nylon mesh'],['Mesh Size','5 mm'],['Capacity','~5 kg'],
+      ['Width','0.7 m'],['Mount','Front-facing swing']
+    ]
+  },
+  propeller:{
+    title:'Propulsion System',
+    desc:'Rear brushless DC motor with 4-blade propeller providing forward thrust and steering.',
+    specs:[
+      ['Motor','Brushless DC'],['RPM','2400'],['Thrust','~3 kg'],
+      ['Voltage','12 V'],['Power','15 W']
+    ]
+  },
+  controller:{
+    title:'IoT Controller & Battery',
+    desc:'Raspberry Pi / ESP32 based controller with Wi-Fi connectivity, GPS, ultrasonic sensors and Li-Ion battery pack.',
+    specs:[
+      ['MCU','Raspberry Pi 4 / ESP32'],['Connectivity','Wi-Fi, Bluetooth'],
+      ['Battery','20Ah / 12V LiFePO4'],['Runtime','4–6 hrs'],['Sensors','GPS, Ultrasonic, IMU']
+    ]
+  }
+};
+
+// Part highlight colors
+const highlightColor={
+  hull:0x1e8aff, solar:0xffd60a, camera:0x00d4ff,
+  net:0x00ffd0, propeller:0xff4d6d, controller:0xbf5fff
+};
+const baseColors={};
+
+// ── Part groups map ──
+const partGroupMap={
+  hull:hullGroup, solar:solarGroup, camera:cameraGroup,
+  net:netGroup, propeller:propGroup, controller:ctrlGroup
+};
+
+let currentPart='all';
+let exploded=false;
+
+// ═══════════════════════════════════════
+//  SELECT PART
+// ═══════════════════════════════════════
+function selectPart(name){
+  currentPart=name;
+  // Update buttons
+  document.querySelectorAll('.part-btn').forEach(b=>{
+    b.classList.toggle('active',b.dataset.part===name);
+  });
+
+  // Reset all materials opacity
+  Object.keys(partGroupMap).forEach(k=>{
+    partGroupMap[k].traverse(m=>{
+      if(m.isMesh){
+        m.material.opacity = (name==='all'||name===k) ? (m.material._baseOpacity||1) : 0.08;
+        m.material.transparent = true;
+      }
+    });
+  });
+
+  // Show card
+  if(name!=='all' && partData[name]){
+    const d=partData[name];
+    document.getElementById('card-title').textContent=d.title;
+    const sl=document.getElementById('card-specs');
+    sl.innerHTML='';
+    d.specs.forEach(([k,v])=>{
+      const li=document.createElement('li');
+      li.innerHTML=`${k}<span>${v}</span>`;
+      sl.appendChild(li);
+    });
+    document.getElementById('card-desc').textContent=d.desc;
+    document.getElementById('info-card').classList.add('visible');
+
+    // Camera focus
+    const grp=partGroupMap[name];
+    if(grp){
+      const box=new THREE.Box3().setFromObject(grp);
+      const center=box.getCenter(new THREE.Vector3());
+      // Animate camera
+      gsTo(camera.position,{
+        x:center.x+3,y:center.y+2,z:center.z+4
+      },800);
+    }
+  } else {
+    document.getElementById('info-card').classList.remove('visible');
+  }
+}
+
+// Simple tween
+function gsTo(obj,target,dur){
+  const start={};const diff={};
+  Object.keys(target).forEach(k=>{start[k]=obj[k];diff[k]=target[k]-obj[k];});
+  const t0=performance.now();
+  function tick(){
+    const p=Math.min((performance.now()-t0)/dur,1);
+    const e=1-Math.pow(1-p,3); // ease-out cubic
+    Object.keys(target).forEach(k=>obj[k]=start[k]+diff[k]*e);
+    if(p<1)requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+}
+
+function closeCard(){
+  document.getElementById('info-card').classList.remove('visible');
+  selectPart('all');
+}
+
+// ═══════════════════════════════════════
+//  VIEW CONTROLS
+// ═══════════════════════════════════════
+document.getElementById('btn-reset').onclick=()=>{
+  targetSpherical={theta:0.6,phi:1.1,r:10};
+  if(exploded)toggleExplode();
+  selectPart('all');
+};
+document.getElementById('btn-top').onclick=()=>{
+  targetSpherical.phi=0.35;targetSpherical.theta=0;targetSpherical.r=10;
+};
+document.getElementById('btn-front').onclick=()=>{
+  targetSpherical.theta=0;targetSpherical.phi=1.2;targetSpherical.r=8;
+};
+document.getElementById('btn-explode').onclick=()=>toggleExplode();
+
+const explodeOffsets={
+  hull:    {x:0,   y:-0.8, z:0},
+  solar:   {x:0,   y:2.2,  z:0},
+  camera:  {x:0.5, y:2.8,  z:0},
+  net:     {x:2.2, y:0.2,  z:0},
+  propeller:{x:-2.2,y:0,   z:0},
+  controller:{x:0, y:1.4,  z:1.5}
+};
+
+function toggleExplode(){
+  exploded=!exploded;
+  Object.keys(partGroupMap).forEach(k=>{
+    const grp=partGroupMap[k];
+    const off=explodeOffsets[k];
+    if(exploded){
+      gsTo(grp.position,{x:off.x,y:off.y,z:off.z},700);
+    } else {
+      gsTo(grp.position,{x:origPos[k].x,y:origPos[k].y,z:origPos[k].z},700);
+    }
+  });
+  document.getElementById('btn-explode').style.color = exploded ? '#ffd60a' : '';
+  document.getElementById('btn-explode').style.borderColor = exploded ? '#ffd60a' : '';
+}
+
+// ═══════════════════════════════════════
+//  WATER ANIMATION
+// ═══════════════════════════════════════
+const wPos=waterPlane.geometry.attributes.position;
+const wOrig=new Float32Array(wPos.array);
+
+// ═══════════════════════════════════════
+//  ANIMATE LOOP
+// ═══════════════════════════════════════
+const clock=new THREE.Clock();
+
+function animate(){
+  requestAnimationFrame(animate);
+  const t=clock.getElapsedTime();
+
+  // Smooth camera
+  spherical.theta+=(targetSpherical.theta-spherical.theta)*0.08;
+  spherical.phi+=(targetSpherical.phi-spherical.phi)*0.08;
+  spherical.r+=(targetSpherical.r-spherical.r)*0.08;
+  targetSpherical.theta=spherical.theta; // sync back
+  targetSpherical.phi=spherical.phi;
+  targetSpherical.r=spherical.r;
+  updateCamera();
+
+  // Propeller spin
+  propGroup.children.forEach((c,i)=>{
+    if(c.isMesh && c.geometry && c.geometry.type==='BoxGeometry'){
+      // spin blades around x-axis of propGroup
+    }
+  });
+  // Rotate whole prop group around its axis
+  const propMeshes=propGroup.children.filter(c=>c.isMesh);
+  propMeshes.forEach(m=>{
+    if(m.geometry.parameters && m.geometry.parameters.width===0.08){
+      // blades - don't rotate individually, rotate group
+    }
+  });
+  // Find hub and rotate propGroup children
+  propGroup.rotation.x = t*4;
+
+  // Robot gentle bob
+  if(!exploded){
+    robot.position.y=Math.sin(t*0.8)*0.06;
+    robot.rotation.z=Math.sin(t*0.5)*0.015;
+  }
+
+  // Water wave
+  for(let i=0;i<wPos.count;i++){
+    const ix=wOrig[i*3], iz=wOrig[i*3+2];
+    wPos.array[i*3+1]=Math.sin(ix*0.7+t)*0.12+Math.cos(iz*0.5+t*0.8)*0.1;
+  }
+  wPos.needsUpdate=true;
+  waterPlane.geometry.computeVertexNormals();
+
+  // Camera LED pulse
+  fillLight.intensity=0.8+Math.sin(t*2)*0.3;
+
+  renderer.render(scene,camera);
+}
+
+// ── RESIZE ──
+window.addEventListener('resize',()=>{
+  camera.aspect=W()/H();
+  camera.updateProjectionMatrix();
+  renderer.setSize(W(),H());
+});
+
+// ── HIDE LOADER ──
+setTimeout(()=>{
+  const loader=document.getElementById('loader');
+  loader.style.opacity='0';
+  setTimeout(()=>loader.style.display='none',800);
+},1600);
+
+animate();
+</script>
+</body>
+</html>
